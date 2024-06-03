@@ -68,6 +68,30 @@ app.post('/users', async (req, res) => {
   }
 });
 
+//  Query user role endpoint
+// In your Express backend
+
+app.get('/users/role/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    // Query the database to fetch the user's role based on the email address
+    // Assuming you have a MongoDB collection named 'users'
+    const user = await usersCollection.findOne({ email });
+    if (user) {
+      // If user is found, send back the role
+      res.status(200).json({ role: user.role });
+    } else {
+      // If user is not found, return a 404 Not Found error
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching user role:', error);
+    // If there's an error, return a 500 Internal Server Error
+    res.status(500).send({ message: 'Failed to fetch user role' });
+  }
+});
+
+
     
 
     await client.db('admin').command({ ping: 1 });
