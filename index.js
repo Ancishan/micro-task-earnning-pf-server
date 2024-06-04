@@ -55,65 +55,56 @@ async function run() {
       }
     });
 
-    // In your Express backend
-    // In your Express backend
-
     app.post('/users', async (req, res) => {
       try {
-        const { email } = req.body;
+        const { name, email, photoURL, role } = req.body;
         // Check if the user already exists in the database
         const existingUser = await usersCollection.findOne({ email });
         if (existingUser) {
-          // If the user already exists, send back a message indicating that the user is already registered
-          return res.status(400).send({ message: 'User already registered' });
+          // If the user already exists, update their details
+          const updatedUser = await usersCollection.updateOne(
+            { email },
+            { $set: { name, photoURL, role } }
+          );
+          return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser });
+        } else {
+          // If the user does not exist, proceed with inserting the new user data into the database
+          const newUser = { name, email, photoURL, role };
+          const result = await usersCollection.insertOne(newUser);
+          res.status(201).send({ success: true, message: 'User created successfully', newUser: result.ops[0] });
         }
-
-        // If the user does not exist, proceed with inserting the new user data into the database
-        const { name, photoURL, role } = req.body;
-        const newUser = { name, email, photoURL, role };
-        const result = await usersCollection.insertOne(newUser);
-        res.status(201).send(result);
       } catch (error) {
-        console.error('Error creating user:', error);
-        res.status(500).send({ message: 'Failed to create user' });
+        console.error('Error creating or updating user:', error);
+        res.status(500).send({ message: 'Failed to create or update user' });
       }
     });
 
     app.get('/users/role/:email', async (req, res) => {
       try {
         const { email } = req.params;
-        // Query the database to fetch the user's role based on the email address
-        // Assuming you have a MongoDB collection named 'users'
         const user = await usersCollection.findOne({ email });
         if (user) {
-          // If user is found, send back the role
           res.status(200).json({ role: user.role });
         } else {
-          // If user is not found, return a 404 Not Found error
           res.status(404).json({ message: 'User not found' });
         }
       } catch (error) {
         console.error('Error fetching user role:', error);
-        // If there's an error, return a 500 Internal Server Error
         res.status(500).send({ message: 'Failed to fetch user role' });
       }
     });
 
-  
-
-       // Endpoint to add new task
-       app.post('/tasks', async (req, res) => {
-        try {
-          const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url } = req.body;
-          const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url };
-          const result = await tasksCollection.insertOne(newTask);
-          res.status(201).send(result);
-        } catch (error) {
-          console.error('Error creating task:', error);
-          res.status(500).send({ message: 'Failed to create task' });
-        }
-      });
-
+    app.post('/tasks', async (req, res) => {
+      try {
+        const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url } = req.body;
+        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url };
+        const result = await tasksCollection.insertOne(newTask);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error creating task:', error);
+        res.status(500).send({ message: 'Failed to create task' });
+      }
+    });
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
