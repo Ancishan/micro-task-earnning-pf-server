@@ -205,16 +205,16 @@ app.get("/view/:id", async (req, res) => {
       }
     });
 
-    app.get('/submissions', async (req, res) => {
-      const { worker_email } = req.query;
-      try {
-        const submissions = await submissionsCollection.find({ worker_email }).toArray();
-        res.status(200).send(submissions);
-      } catch (error) {
-        console.error('Error fetching submissions:', error);
-        res.status(500).send({ message: 'Failed to fetch submissions' });
-      }
-    });
+    // app.get('/submissions', async (req, res) => {
+    //   const { worker_email } = req.query;
+    //   try {
+    //     const submissions = await submissionsCollection.find({ worker_email }).toArray();
+    //     res.status(200).send(submissions);
+    //   } catch (error) {
+    //     console.error('Error fetching submissions:', error);
+    //     res.status(500).send({ message: 'Failed to fetch submissions' });
+    //   }
+    // });
     
     
   
