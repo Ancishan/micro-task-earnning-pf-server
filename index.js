@@ -91,6 +91,11 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch user role' });
       }
     });
+    app.get('/tasks', async (req, res) => {
+      const cursor = tasksCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    })
 
     app.post('/tasks', async (req, res) => {
       try {
