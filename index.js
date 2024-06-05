@@ -58,17 +58,14 @@ async function run() {
     app.post('/users', async (req, res) => {
       try {
         const { name, email, photoURL, role } = req.body;
-        // Check if the user already exists in the database
         const existingUser = await usersCollection.findOne({ email });
         if (existingUser) {
-          // If the user already exists, update their details
           const updatedUser = await usersCollection.updateOne(
             { email },
             { $set: { name, photoURL, role } }
           );
           return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser: existingUser });
         } else {
-          // If the user does not exist, proceed with inserting the new user data into the database
           const newUser = { name, email, photoURL, role };
           const { insertedId } = await usersCollection.insertOne(newUser);
           const createdUser = await usersCollection.findOne({ _id: insertedId });
@@ -95,33 +92,67 @@ async function run() {
       }
     });
 
-  // Backend routes
-app.post('/tasks', async (req, res) => {
-  try {
-    const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, user_email } = req.body;
-    const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, createdBy: user_email }; // Adjust createdBy field
-    const result = await tasksCollection.insertOne(newTask);
-    res.status(201).send(result);
-  } catch (error) {
-    console.error('Error creating task:', error);
-    res.status(500).send({ message: 'Failed to create task' });
-  }
-});
+    app.post('/tasks', async (req, res) => {
+      try {
+        const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, user_email } = req.body;
+        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, createdBy: user_email };
+        const result = await tasksCollection.insertOne(newTask);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error creating task:', error);
+        res.status(500).send({ message: 'Failed to create task' });
+      }
+    });
 
-app.get("/tasks/:createdBy", async (req, res) => {
-  try {
-    const { createdBy } = req.params;
-    const result = await tasksCollection.find({ createdBy }).toArray();
-    res.send(result);
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
-    res.status(500).send({ message: 'Failed to fetch tasks' });
-  }
-});
+    app.get('/tasks/:createdBy', async (req, res) => {
+      try {
+        const { createdBy } = req.params;
+        const result = await tasksCollection.find({ createdBy }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error('Error fetching tasks:', error);
+        res.status(500).send({ message: 'Failed to fetch tasks' });
+      }
+    });
 
+    // Update task
+    app.put('/tasks/:id', async (req, res) => {
+      const { id } = req.params;
+      const { task_title, task_detail, task_quantity, payable_amount } = req.body;
+      try {
+        const result = await tasksCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { task_title, task_detail, task_quantity, payable_amount } }
+        );
+        res.status(200).send(result);
+      } catch (error) {
+        console.error('Error updating task:', error);
+        res.status(500).send({ message: 'Failed to update task' });
+      }
+    });
 
-
-    
+    app.delete('/tasks/:id', async (req, res) => {
+      const { id } = req.params;
+      try {
+        const task = await tasksCollection.findOne({ _id: new ObjectId(id) });
+        if (!task) {
+          return res.status(404).send({ message: 'Task not found' });
+        }
+        const result = await tasksCollection.deleteOne({ _id: new ObjectId(id) });
+        const user = await usersCollection.findOne({ email: task.createdBy });
+        if (user) {
+          const coinsToAdd = task.task_quantity * task.payable_amount;
+          await usersCollection.updateOne(
+            { email: task.createdBy },
+            { $inc: { coins: coinsToAdd } }
+          );
+        }
+        res.status(200).send(result);
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        res.status(500).send({ message: 'Failed to delete task' });
+      }
+    });
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
