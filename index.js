@@ -3,7 +3,7 @@ const app = express();
 require('dotenv').config();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 8000;
 
@@ -66,12 +66,13 @@ async function run() {
             { email },
             { $set: { name, photoURL, role } }
           );
-          return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser });
+          return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser: existingUser });
         } else {
           // If the user does not exist, proceed with inserting the new user data into the database
           const newUser = { name, email, photoURL, role };
-          const result = await usersCollection.insertOne(newUser);
-          res.status(201).send({ success: true, message: 'User created successfully', newUser: result.ops[0] });
+          const { insertedId } = await usersCollection.insertOne(newUser);
+          const createdUser = await usersCollection.findOne({ _id: insertedId });
+          res.status(201).send({ success: true, message: 'User created successfully', newUser: createdUser });
         }
       } catch (error) {
         console.error('Error creating or updating user:', error);
@@ -94,17 +95,33 @@ async function run() {
       }
     });
 
-    app.post('/tasks', async (req, res) => {
-      try {
-        const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url } = req.body;
-        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url };
-        const result = await tasksCollection.insertOne(newTask);
-        res.status(201).send(result);
-      } catch (error) {
-        console.error('Error creating task:', error);
-        res.status(500).send({ message: 'Failed to create task' });
-      }
-    });
+  // Backend routes
+app.post('/tasks', async (req, res) => {
+  try {
+    const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, user_email } = req.body;
+    const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, createdBy: user_email }; // Adjust createdBy field
+    const result = await tasksCollection.insertOne(newTask);
+    res.status(201).send(result);
+  } catch (error) {
+    console.error('Error creating task:', error);
+    res.status(500).send({ message: 'Failed to create task' });
+  }
+});
+
+app.get("/tasks/:createdBy", async (req, res) => {
+  try {
+    const { createdBy } = req.params;
+    const result = await tasksCollection.find({ createdBy }).toArray();
+    res.send(result);
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    res.status(500).send({ message: 'Failed to fetch tasks' });
+  }
+});
+
+
+
+    
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
