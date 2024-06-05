@@ -32,6 +32,7 @@ async function run() {
     const db = client.db('microtaskearning');
     const usersCollection = db.collection('users');
     const tasksCollection = db.collection('tasks');
+    const submissionsCollection = db.collection('submissions');
 
     app.post('/jwt', async (req, res) => {
       const user = req.body;
@@ -97,10 +98,27 @@ async function run() {
       res.send(result);
     })
 
+    
+
+app.get("/view/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await tasksCollection.findOne({ _id: new ObjectId(id) });
+    if (!result) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching task details:", error);
+    res.status(500).json({ message: "Failed to fetch task details" });
+  }
+});
+
+    
     app.post('/tasks', async (req, res) => {
       try {
-        const { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, user_email } = req.body;
-        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, submission_info, task_image_url, createdBy: user_email };
+        const { task_title, task_detail, task_quantity, payable_amount, completion_date, task_image_url, user_email,user_name } = req.body;
+        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date,  task_image_url, createdBy: user_email,user_name };
         const result = await tasksCollection.insertOne(newTask);
         res.status(201).send(result);
       } catch (error) {
@@ -158,6 +176,48 @@ async function run() {
         res.status(500).send({ message: 'Failed to delete task' });
       }
     });
+
+
+    app.post('/submissions', async (req, res) => {
+      try {
+        const { task_id, task_title, task_detail, task_img_url, payable_amount, worker_email, submission_details, worker_name, creator_name, creator_email, current_date, status } = req.body;
+
+        const newSubmission = {
+          task_id: new ObjectId(task_id),
+          task_title,
+          task_detail,
+          task_img_url,
+          payable_amount,
+          worker_email,
+          submission_details,
+          worker_name,
+          creator_name,
+          creator_email,
+          current_date: new Date(current_date),
+          status
+        };
+
+        const result = await submissionsCollection.insertOne(newSubmission);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error('Error submitting task:', error);
+        res.status(500).send({ message: 'Failed to submit task' });
+      }
+    });
+
+    app.get('/submissions', async (req, res) => {
+      const { worker_email } = req.query;
+      try {
+        const submissions = await submissionsCollection.find({ worker_email }).toArray();
+        res.status(200).send(submissions);
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+        res.status(500).send({ message: 'Failed to fetch submissions' });
+      }
+    });
+    
+    
+  
 
     await client.db('admin').command({ ping: 1 });
     console.log('Pinged your deployment. You successfully connected to MongoDB!');
