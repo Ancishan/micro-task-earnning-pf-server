@@ -4,6 +4,7 @@ require('dotenv').config();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 8000;
 
@@ -92,33 +93,31 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch user role' });
       }
     });
+
     app.get('/tasks', async (req, res) => {
       const cursor = tasksCollection.find();
       const result = await cursor.toArray();
       res.send(result);
-    })
+    });
 
-    
+    app.get('/view/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await tasksCollection.findOne({ _id: new ObjectId(id) });
+        if (!result) {
+          return res.status(404).json({ message: "Task not found" });
+        }
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching task details:", error);
+        res.status(500).json({ message: "Failed to fetch task details" });
+      }
+    });
 
-app.get("/view/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await tasksCollection.findOne({ _id: new ObjectId(id) });
-    if (!result) {
-      return res.status(404).json({ message: "Task not found" });
-    }
-    res.json(result);
-  } catch (error) {
-    console.error("Error fetching task details:", error);
-    res.status(500).json({ message: "Failed to fetch task details" });
-  }
-});
-
-    
     app.post('/tasks', async (req, res) => {
       try {
-        const { task_title, task_detail, task_quantity, payable_amount, completion_date, task_image_url, user_email,user_name } = req.body;
-        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date,  task_image_url, createdBy: user_email,user_name };
+        const { task_title, task_detail, task_quantity, payable_amount, completion_date, task_image_url, user_email, user_name } = req.body;
+        const newTask = { task_title, task_detail, task_quantity, payable_amount, completion_date, task_image_url, createdBy: user_email, user_name };
         const result = await tasksCollection.insertOne(newTask);
         res.status(201).send(result);
       } catch (error) {
@@ -138,7 +137,6 @@ app.get("/view/:id", async (req, res) => {
       }
     });
 
-    // Update task
     app.put('/tasks/:id', async (req, res) => {
       const { id } = req.params;
       const { task_title, task_detail, task_quantity, payable_amount } = req.body;
@@ -177,7 +175,6 @@ app.get("/view/:id", async (req, res) => {
       }
     });
 
-
     app.post('/submissions', async (req, res) => {
       try {
         const { task_id, task_title, task_detail, task_img_url, payable_amount, worker_email, submission_details, worker_name, creator_name, creator_email, current_date, status } = req.body;
@@ -205,44 +202,83 @@ app.get("/view/:id", async (req, res) => {
       }
     });
 
-    app.get('/submissions', async (req, res) => {
-      const { worker_email } = req.query;
+    app.get('/submissions/exists', async (req, res) => {
+      const { task_id, worker_email } = req.query;
       try {
-        const submissions = await submissionsCollection.find({ worker_email }).toArray();
+          const submission = await submissionsCollection.findOne({ task_id: new ObjectId(task_id), worker_email });
+          if (submission) {
+              return res.status(200).send({ exists: true });
+          }
+          res.status(200).send({ exists: false });
+      } catch (error) {
+          console.error('Error checking submission existence:', error);
+          res.status(500).send({ message: 'Failed to check submission existence' });
+      }
+  });
+  
+
+    app.get('/submissions', async (req, res) => {
+      const { worker_email, creator_email, status } = req.query;
+      const query = {};
+      if (worker_email) query.worker_email = worker_email;
+      if (creator_email) query.creator_email = creator_email;
+      if (status) query.status = status;
+      try {
+        const submissions = await submissionsCollection.find(query).toArray();
         res.status(200).send(submissions);
       } catch (error) {
         console.error('Error fetching submissions:', error);
         res.status(500).send({ message: 'Failed to fetch submissions' });
       }
     });
-    
+
     app.put('/submissions/:id', async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
       try {
+        const submission = await submissionsCollection.findOne({ _id: new ObjectId(id) });
+        if (!submission) {
+          return res.status(404).send({ message: 'Submission not found' });
+        }
+        
         await submissionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status } });
+
+        if (status === 'approved') {
+            const coinsToAdd = submission.payable_amount;
+            await usersCollection.updateOne(
+                { email: submission.worker_email },
+                { $inc: { coins: coinsToAdd } }
+            );
+        }
+
         res.status(200).send({ message: 'Submission updated successfully' });
       } catch (error) {
         console.error('Error updating submission:', error);
         res.status(500).send({ message: 'Failed to update submission' });
       }
     });
-    
-    
-  
 
-    await client.db('admin').command({ ping: 1 });
-    console.log('Pinged your deployment. You successfully connected to MongoDB!');
+    app.put('/users/update-coins', async (req, res) => {
+      const { email, coins } = req.body;
+      try {
+        await usersCollection.updateOne(
+          { email },
+          { $inc: { coins } }
+        );
+        res.status(200).send({ message: 'User coins updated successfully' });
+      } catch (error) {
+        console.error('Error updating user coins:', error);
+        res.status(500).send({ message: 'Failed to update user coins' });
+      }
+    });
+
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+
   } finally {
-    // Ensures that the client will close when you finish/error
+    // Ensure client.close() is not called here, to keep the connection open.
   }
 }
+
 run().catch(console.dir);
-
-app.get('/', (req, res) => {
-  res.send('Hello from micro task Server..');
-});
-
-app.listen(port, () => {
-  console.log(`micro task is running on port ${port}`);
-});
