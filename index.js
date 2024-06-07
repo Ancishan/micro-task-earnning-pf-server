@@ -301,27 +301,26 @@ app.get('/submissions/approved', async (req, res) => {
         res.status(500).send({ message: 'Failed to fetch submissions' });
       }
     });
-
-    app.post('/payments', async (req, res) => {
-      const { submissionId } = req.body;
+    app.post('/payment', async (req, res) => {
+      const { amount, id } = req.body;
       try {
-          const submission = await submissionsCollection.findOne({ _id: new ObjectId(submissionId) });
-          if (!submission) {
-              return res.status(404).send({ message: 'Submission not found' });
-          }
-  
-          // Payment logic here
-          // e.g., integrate with a payment gateway like Stripe
-  
-          // After successful payment
-          await submissionsCollection.updateOne({ _id: new ObjectId(submissionId) }, { $set: { payment_status: 'paid' } });
-  
-          res.status(200).send({ message: 'Payment processed successfully' });
+        // Use Stripe API to charge the payment method
+        const payment = await stripe.paymentIntents.create({
+          amount: amount * 100, // Stripe expects the amount in cents
+          currency: 'usd', // Change the currency as needed
+          payment_method: id,
+          confirm: true,
+          return_url: 'http://localhost:5173/dashboard/pay', // Specify your return URL here
+        });
+    
+        // If payment is successful, send a success response
+        res.status(200).json({ success: true });
       } catch (error) {
-          console.error('Error processing payment:', error);
-          res.status(500).send({ message: 'Failed to process payment' });
+        console.error('Error processing payment:', error);
+        res.status(500).json({ success: false, error: error.message });
       }
-  });
+    });
+    
   
 
     app.put('/submissions/:id', async (req, res) => {
