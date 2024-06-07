@@ -34,6 +34,7 @@ async function run() {
     const usersCollection = db.collection('users');
     const tasksCollection = db.collection('tasks');
     const submissionsCollection = db.collection('submissions');
+    const reviewCollection = db.collection("reviews");
 
     app.post('/jwt', async (req, res) => {
       const user = req.body;
@@ -228,6 +229,10 @@ app.get('/users', async (req, res) => {
         res.status(500).send({ message: 'Failed to delete task' });
       }
     });
+    app.get('/reviews', async (req, res) => {
+      const result = await reviewCollection.find().toArray();
+      res.send(result);
+    })
 
     app.post('/submissions', async (req, res) => {
       try {
@@ -269,7 +274,18 @@ app.get('/users', async (req, res) => {
           res.status(500).send({ message: 'Failed to check submission existence' });
       }
   });
-  
+// Fetch Approved Submissions
+app.get('/submissions/approved', async (req, res) => {
+  const { status } = req.query;
+  try {
+    const submissions = await submissionsCollection.find({ status }).toArray();
+    res.json(submissions);
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    res.status(500).json({ message: 'Failed to fetch submissions' });
+  }
+});
+
 
     app.get('/submissions', async (req, res) => {
       const { worker_email, creator_email, status } = req.query;
@@ -285,6 +301,28 @@ app.get('/users', async (req, res) => {
         res.status(500).send({ message: 'Failed to fetch submissions' });
       }
     });
+
+    app.post('/payments', async (req, res) => {
+      const { submissionId } = req.body;
+      try {
+          const submission = await submissionsCollection.findOne({ _id: new ObjectId(submissionId) });
+          if (!submission) {
+              return res.status(404).send({ message: 'Submission not found' });
+          }
+  
+          // Payment logic here
+          // e.g., integrate with a payment gateway like Stripe
+  
+          // After successful payment
+          await submissionsCollection.updateOne({ _id: new ObjectId(submissionId) }, { $set: { payment_status: 'paid' } });
+  
+          res.status(200).send({ message: 'Payment processed successfully' });
+      } catch (error) {
+          console.error('Error processing payment:', error);
+          res.status(500).send({ message: 'Failed to process payment' });
+      }
+  });
+  
 
     app.put('/submissions/:id', async (req, res) => {
       const { id } = req.params;
