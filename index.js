@@ -57,6 +57,38 @@ async function run() {
       }
     });
 
+    // Add a new route to fetch all users' details
+app.get('/admin/users', async (req, res) => {
+  try {
+    const users = await usersCollection.find().toArray();
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+});
+
+// Add a route to delete a user by ID
+app.delete('/admin/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Failed to delete user' });
+  }
+});
+
+app.get('/users', async (req, res) => {
+  const result = await usersCollection.find().toArray();
+  res.send(result);
+});
+
+
     app.post('/users', async (req, res) => {
       try {
         const { name, email, photoURL, role } = req.body;
