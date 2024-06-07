@@ -45,6 +45,28 @@ async function run() {
       }).send({ success: true });
     });
 
+    const verifyToken = (req, res, next) => {
+      const authHeader = req.headers.authorization;
+
+      // Check if Authorization header is present
+      if (!authHeader) {
+        return res.status(401).send({ message: 'Unauthorized access: No token provided' });
+      }
+
+      // Extract token from Authorization header
+      const token = authHeader.split(' ')[1];
+
+      // Verify JWT token
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(403).send({ message: 'Failed to authenticate token' });
+        }
+        // Store decoded user data in request object
+        req.decoded = decoded;
+        next();
+      });
+    };
+
     app.get('/logout', async (req, res) => {
       try {
         res.clearCookie('token', {
