@@ -6,10 +6,11 @@ const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
+const { default: axios } = require('axios');
 const port = process.env.PORT || 8000;
 
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://micro-task-earnning-pf-client.web.app'],
   credentials: true,
   optionSuccessStatus: 200,
 };
@@ -17,6 +18,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+app.use(express.urlencoded());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.nhcslav.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
@@ -29,13 +31,13 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db('microtaskearning');
     const usersCollection = db.collection('users');
     const tasksCollection = db.collection('tasks');
     const submissionsCollection = db.collection('submissions');
-    const reviewCollection = db.collection("reviews");
-
+    // const reviewCollection = db.collection("reviews");
+    const commentsCollection = db.collection('comments'); 
     app.post('/jwt', async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '365d' });
@@ -81,49 +83,49 @@ async function run() {
     });
 
     // Add a new route to fetch all users' details
-app.get('/admin/users', async (req, res) => {
-  try {
-    const users = await usersCollection.find().toArray();
-    res.status(200).json(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Failed to fetch users' });
-  }
-});
+    app.get('/admin/users', async (req, res) => {
+      try {
+        const users = await usersCollection.find().toArray();
+        res.status(200).json(users);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ message: 'Failed to fetch users' });
+      }
+    });
 
-// Add a route to delete a user by ID
-app.delete('/admin/users/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    res.status(200).json({ message: 'User deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ message: 'Failed to delete user' });
-  }
-});
+    // Add a route to delete a user by ID
+    app.delete('/admin/users/:id', async (req, res) => {
+      const { id } = req.params;
+      try {
+        const result = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json({ message: 'User deleted successfully' });
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ message: 'Failed to delete user' });
+      }
+    });
 
-app.get('/users', async (req, res) => {
-  const result = await usersCollection.find().toArray();
-  res.send(result);
-});
+    app.get('/users', async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
 
 
     app.post('/users', async (req, res) => {
       try {
-        const { name, email, photoURL, role } = req.body;
+        const { name, email, photoURL, role, skill } = req.body;
         const existingUser = await usersCollection.findOne({ email });
         if (existingUser) {
           const updatedUser = await usersCollection.updateOne(
             { email },
-            { $set: { name, photoURL, role } }
+            { $set: { name, photoURL, role, skill} }
           );
           return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser: existingUser });
         } else {
-          const newUser = { name, email, photoURL, role };
+          const newUser = { name, email, photoURL, role, skill };
           const { insertedId } = await usersCollection.insertOne(newUser);
           const createdUser = await usersCollection.findOne({ _id: insertedId });
           res.status(201).send({ success: true, message: 'User created successfully', newUser: createdUser });
@@ -133,6 +135,22 @@ app.get('/users', async (req, res) => {
         res.status(500).send({ message: 'Failed to create or update user' });
       }
     });
+
+    app.get('/users', async (req, res) => {
+      const { email } = req.query;
+      try {
+        const user = await usersCollection.findOne({ email });
+        if (user) {
+          res.status(200).json([user]);
+        } else {
+          res.status(404).json({ message: 'User not found' });
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        res.status(500).json({ message: 'Failed to fetch user' });
+      }
+    });
+    
 
     app.get('/users/role/:email', async (req, res) => {
       try {
@@ -229,10 +247,52 @@ app.get('/users', async (req, res) => {
         res.status(500).send({ message: 'Failed to delete task' });
       }
     });
+    
+    // Update user's comment
+    app.put('/users/update-comment', async (req, res) => {
+      const { email, comment } = req.body;
+      try {
+        const result = await usersCollection.updateOne(
+          { email },
+          { $set: { comment } }
+        );
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json({ message: 'Comment updated successfully' });
+      } catch (error) {
+        console.error('Error updating comment:', error);
+        res.status(500).json({ message: 'Failed to update comment' });
+      }
+    });
+
+    // Fetch all reviews for a specific user based on their email
     app.get('/reviews', async (req, res) => {
-      const result = await reviewCollection.find().toArray();
-      res.send(result);
-    })
+      const { user_email } = req.query;
+      try {
+        const reviews = await reviewCollection.find({ user_email }).toArray();
+        res.status(200).json(reviews);
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+        res.status(500).json({ message: 'Failed to fetch reviews' });
+      }
+    });
+
+     // Fetch user profile data based on email
+     app.get('/users', async (req, res) => {
+      const { email } = req.query;
+      try {
+        const user = await usersCollection.findOne({ email });
+        if (user) {
+          res.status(200).json([user]);
+        } else {
+          res.status(404).json({ message: 'User not found' });
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        res.status(500).json({ message: 'Failed to fetch user' });
+      }
+    });
 
     app.post('/submissions', async (req, res) => {
       try {
@@ -264,27 +324,27 @@ app.get('/users', async (req, res) => {
     app.get('/submissions/exists', async (req, res) => {
       const { task_id, worker_email } = req.query;
       try {
-          const submission = await submissionsCollection.findOne({ task_id: new ObjectId(task_id), worker_email });
-          if (submission) {
-              return res.status(200).send({ exists: true });
-          }
-          res.status(200).send({ exists: false });
+        const submission = await submissionsCollection.findOne({ task_id: new ObjectId(task_id), worker_email });
+        if (submission) {
+          return res.status(200).send({ exists: true });
+        }
+        res.status(200).send({ exists: false });
       } catch (error) {
-          console.error('Error checking submission existence:', error);
-          res.status(500).send({ message: 'Failed to check submission existence' });
+        console.error('Error checking submission existence:', error);
+        res.status(500).send({ message: 'Failed to check submission existence' });
       }
-  });
-// Fetch Approved Submissions
-app.get('/submissions/approved', async (req, res) => {
-  const { status } = req.query;
-  try {
-    const submissions = await submissionsCollection.find({ status }).toArray();
-    res.json(submissions);
-  } catch (error) {
-    console.error('Error fetching submissions:', error);
-    res.status(500).json({ message: 'Failed to fetch submissions' });
-  }
-});
+    });
+    // Fetch Approved Submissions
+    app.get('/submissions/approved', async (req, res) => {
+      const { status } = req.query;
+      try {
+        const submissions = await submissionsCollection.find({ status }).toArray();
+        res.json(submissions);
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+        res.status(500).json({ message: 'Failed to fetch submissions' });
+      }
+    });
 
 
     app.get('/submissions', async (req, res) => {
@@ -303,69 +363,85 @@ app.get('/submissions/approved', async (req, res) => {
     });
 
 
-    
-    app.post('/payment', async (req, res) => {
-      const { amount, id } = req.body;
-    
-      try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amount * 100, // amount in cents
-          currency: 'usd',
-          payment_method: id,
-          confirm: true,
-        });
-    
-        res.status(200).json({ success: true });
-      } catch (error) {
-        console.error('Error processing payment:', error);
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-  
-
     app.put('/submissions/:id', async (req, res) => {
       const { id } = req.params;
-      const { status } = req.body;
+      const { link } = req.body;
+    
       try {
-        const submission = await submissionsCollection.findOne({ _id: new ObjectId(id) });
-        if (!submission) {
+        const result = await submissionsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { link } }
+        );
+    
+        if (result.matchedCount === 0) {
           return res.status(404).send({ message: 'Submission not found' });
         }
-        
-        await submissionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status } });
-
-        if (status === 'approved') {
-            const coinsToAdd = submission.payable_amount;
-            await usersCollection.updateOne(
-                { email: submission.worker_email },
-                { $inc: { coins: coinsToAdd } }
-            );
-        }
-
-        res.status(200).send({ message: 'Submission updated successfully' });
+    
+        res.status(200).send({ message: 'Link updated successfully' });
       } catch (error) {
-        console.error('Error updating submission:', error);
-        res.status(500).send({ message: 'Failed to update submission' });
+        console.error('Error updating submission link:', error);
+        res.status(500).send({ message: 'Failed to update submission link' });
       }
     });
+    
 
-    app.put('/users/update-coins', async (req, res) => {
-      const { email, coins } = req.body;
-      try {
-        await usersCollection.updateOne(
-          { email },
-          { $inc: { coins } }
-        );
-        res.status(200).send({ message: 'User coins updated successfully' });
-      } catch (error) {
-        console.error('Error updating user coins:', error);
-        res.status(500).send({ message: 'Failed to update user coins' });
-      }
-    });
+    // Add this to your Express routes
+app.get('/workers', async (req, res) => {
+  try {
+    const workers = await usersCollection.find({ role: 'Worker' }).toArray();
+    res.status(200).json(workers);
+  } catch (error) {
+    console.error('Error fetching workers:', error);
+    res.status(500).json({ message: 'Failed to fetch workers' });
+  }
+});
+app.post('/comments', async (req, res) => {
+  try {
+    const { workerEmail, commenterName, commentText } = req.body;
+    const newComment = {
+      workerEmail,
+      commenterName,
+      commentText,
+      createdAt: new Date(),
+    };
+    const result = await commentsCollection.insertOne(newComment);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({ message: 'Failed to add comment' });
+  }
+});
 
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    });
+// Route to get comments for a specific worker
+app.get('/comments/:workerEmail', async (req, res) => {
+  const { workerEmail } = req.params;
+  try {
+    const comments = await commentsCollection.find({ workerEmail }).toArray();
+    res.status(200).json(comments);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+    res.status(500).json({ message: 'Failed to fetch comments' });
+  }
+});
+
+app.post('/comments', async (req, res) => {
+  try {
+    const { workerEmail, commenterName, commenterPhotoURL, commentText } = req.body;
+    const newComment = {
+      workerEmail,
+      commenterName,
+      commenterPhotoURL,
+      commentText,
+      createdAt: new Date(),
+    };
+    const result = await commentsCollection.insertOne(newComment);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({ message: 'Failed to add comment' });
+  }
+});
+
 
   } finally {
     // Ensure client.close() is not called here, to keep the connection open.
@@ -373,3 +449,11 @@ app.get('/submissions/approved', async (req, res) => {
 }
 
 run().catch(console.dir);
+
+app.get('/', (req, res) => {
+  res.send('micro tasking')
+})
+
+app.listen(port, () => {
+  console.log(`micro tasking port ${port}`)
+})
