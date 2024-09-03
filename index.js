@@ -36,8 +36,8 @@ async function run() {
     const usersCollection = db.collection('users');
     const tasksCollection = db.collection('tasks');
     const submissionsCollection = db.collection('submissions');
-    // const reviewCollection = db.collection("reviews");
-    const commentsCollection = db.collection('comments'); 
+    const paymentsCollection = db.collection('payment');
+    const commentsCollection = db.collection('comments');
     app.post('/jwt', async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '365d' });
@@ -121,7 +121,7 @@ async function run() {
         if (existingUser) {
           const updatedUser = await usersCollection.updateOne(
             { email },
-            { $set: { name, photoURL, role, skill} }
+            { $set: { name, photoURL, role, skill } }
           );
           return res.status(200).send({ success: true, message: 'User updated successfully', updatedUser: existingUser });
         } else {
@@ -150,7 +150,7 @@ async function run() {
         res.status(500).json({ message: 'Failed to fetch user' });
       }
     });
-    
+
 
     app.get('/users/role/:email', async (req, res) => {
       try {
@@ -247,7 +247,7 @@ async function run() {
         res.status(500).send({ message: 'Failed to delete task' });
       }
     });
-    
+
     // Update user's comment
     app.put('/users/update-comment', async (req, res) => {
       const { email, comment } = req.body;
@@ -278,8 +278,8 @@ async function run() {
       }
     });
 
-     // Fetch user profile data based on email
-     app.get('/users', async (req, res) => {
+    // Fetch user profile data based on email
+    app.get('/users', async (req, res) => {
       const { email } = req.query;
       try {
         const user = await usersCollection.findOne({ email });
@@ -366,86 +366,180 @@ async function run() {
     app.put('/submissions/:id', async (req, res) => {
       const { id } = req.params;
       const { link } = req.body;
-    
+
       try {
         const result = await submissionsCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { link } }
         );
-    
+
         if (result.matchedCount === 0) {
           return res.status(404).send({ message: 'Submission not found' });
         }
-    
+
         res.status(200).send({ message: 'Link updated successfully' });
       } catch (error) {
         console.error('Error updating submission link:', error);
         res.status(500).send({ message: 'Failed to update submission link' });
       }
     });
-    
+
 
     // Add this to your Express routes
-app.get('/workers', async (req, res) => {
-  try {
-    const workers = await usersCollection.find({ role: 'Worker' }).toArray();
-    res.status(200).json(workers);
-  } catch (error) {
-    console.error('Error fetching workers:', error);
-    res.status(500).json({ message: 'Failed to fetch workers' });
-  }
-});
-app.post('/comments', async (req, res) => {
-  try {
-    const { workerEmail, commenterName, commentText } = req.body;
-    const newComment = {
-      workerEmail,
-      commenterName,
-      commentText,
-      createdAt: new Date(),
+    app.get('/workers', async (req, res) => {
+      try {
+        const workers = await usersCollection.find({ role: 'Worker' }).toArray();
+        res.status(200).json(workers);
+      } catch (error) {
+        console.error('Error fetching workers:', error);
+        res.status(500).json({ message: 'Failed to fetch workers' });
+      }
+    });
+    app.post('/comments', async (req, res) => {
+      try {
+        const { workerEmail, commenterName, commentText } = req.body;
+        const newComment = {
+          workerEmail,
+          commenterName,
+          commentText,
+          createdAt: new Date(),
+        };
+        const result = await commentsCollection.insertOne(newComment);
+        res.status(201).json(result);
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).json({ message: 'Failed to add comment' });
+      }
+    });
+
+    // Route to get comments for a specific worker
+    app.get('/comments/:workerEmail', async (req, res) => {
+      const { workerEmail } = req.params;
+      try {
+        const comments = await commentsCollection.find({ workerEmail }).toArray();
+        res.status(200).json(comments);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+        res.status(500).json({ message: 'Failed to fetch comments' });
+      }
+    });
+
+    app.post('/comments', async (req, res) => {
+      try {
+        const { workerEmail, commenterName, commenterPhotoURL, commentText } = req.body;
+        const newComment = {
+          workerEmail,
+          commenterName,
+          commenterPhotoURL,
+          commentText,
+          createdAt: new Date(),
+        };
+        const result = await commentsCollection.insertOne(newComment);
+        res.status(201).json(result);
+      } catch (error) {
+        console.error('Error adding comment:', error);
+        res.status(500).json({ message: 'Failed to add comment' });
+      }
+    });
+
+    app.post('/create-payment', async (req, res) => {
+      const paymentInfo = req.body;
+      const trxId = new ObjectId().toString();
+      const initiateData = {
+        store_id: 'shant666e64ff602e4',
+        store_passwd: 'shant666e64ff602e4@ssl',
+        total_amount: paymentInfo.amount,
+        currency: 'BDT',
+        tran_id: trxId,
+        success_url: 'http://localhost:8000/success-payment',
+        fail_url: 'http://localhost:8000/fail',
+        cancel_url: 'http://localhost:8000/cancel',
+        cus_name: paymentInfo.workerName,
+        cus_email: 'cust@yahoo.com',
+        cus_add1: 'Dhaka',
+        cus_add2: 'Dhaka',
+        cus_city: 'Dhaka',
+        cus_state: 'Dhaka',
+        cus_postcode: '1000',
+        cus_country: 'Bangladesh',
+        cus_phone: '01711111111',
+        cus_fax: '01711111111',
+        shipping_method: "NO",
+        product_name: "task",
+        product_category: "task",
+        product_profile: "general",
+          multi_card_name: 'mastercard,visacard,amexcard',
+            value_a: 'ref001_A',
+              value_b: 'ref002_B',
+                value_c: 'ref003_C',
+                  value_d: 'ref004_D'
     };
-    const result = await commentsCollection.insertOne(newComment);
-    res.status(201).json(result);
-  } catch (error) {
-    console.error('Error adding comment:', error);
-    res.status(500).json({ message: 'Failed to add comment' });
-  }
-});
 
-// Route to get comments for a specific worker
-app.get('/comments/:workerEmail', async (req, res) => {
-  const { workerEmail } = req.params;
-  try {
-    const comments = await commentsCollection.find({ workerEmail }).toArray();
-    res.status(200).json(comments);
-  } catch (error) {
-    console.error('Error fetching comments:', error);
-    res.status(500).json({ message: 'Failed to fetch comments' });
-  }
-});
+    const response = await axios({
+      method: "POST",
+      url: "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+      data: initiateData,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    })
 
-app.post('/comments', async (req, res) => {
-  try {
-    const { workerEmail, commenterName, commenterPhotoURL, commentText } = req.body;
-    const newComment = {
-      workerEmail,
-      commenterName,
-      commenterPhotoURL,
-      commentText,
-      createdAt: new Date(),
+    const saveData = {
+      worker_name: paymentInfo.workerName,
+      worker_email: paymentInfo.workerEmail,
+      paymentId: trxId,
+      amount: paymentInfo.amount,
+      status: 'Pending'
     };
-    const result = await commentsCollection.insertOne(newComment);
-    res.status(201).json(result);
-  } catch (error) {
-    console.error('Error adding comment:', error);
-    res.status(500).json({ message: 'Failed to add comment' });
-  }
-});
+
+    const save = await paymentsCollection.insertOne(saveData);
+    if(save) {
+      res.send({
+        paymentUrl: response.data.GatewayPageURL,
+      })
+    }
+
+    // console.log(response)
+  
+  })
+
+  app.post('/success-payment', async (req, res) => {
+    const successData = req.body;
+
+    if(successData.status !== "VALID"){
+      throw new Error("UnAuthorized payment, invalid payment")
+    }
+
+    // update the database for status
+
+    const query = {
+      paymentId : successData.tran_id
+    }
+
+    const update = {
+      $set: {
+        status: "Success"
+      },
+    }
+
+    const updateData = await paymentsCollection.updateOne(query, update)
+
+    console.log("successData", successData);
+    console.log("updateData", updateData);
+
+    res.redirect("http://localhost:5173/success")
+  })
+  app.post('/fail', async (req, res) => {
+    res.redirect("http://localhost:5173/fail")
+  })
+  app.post('/cancel', async (req, res) => {
+    res.redirect("http://localhost:5173/cancel")
+  })
 
 
-  } finally {
-    // Ensure client.close() is not called here, to keep the connection open.
-  }
+} finally {
+  // Ensure client.close() is not called here, to keep the connection open.
+}
 }
 
 run().catch(console.dir);
