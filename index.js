@@ -4,7 +4,7 @@ require('dotenv').config();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const jwt = require('jsonwebtoken');
 const { default: axios } = require('axios');
 const port = process.env.PORT || 8000;
@@ -446,8 +446,8 @@ async function run() {
       const paymentInfo = req.body;
       const trxId = new ObjectId().toString();
       const initiateData = {
-        store_id: 'shant666e64ff602e4',
-        store_passwd: 'shant666e64ff602e4@ssl',
+        store_id: process.env.STORE_ID,
+        store_passwd: process.env.STORE_PASSWD,
         total_amount: paymentInfo.amount,
         currency: 'BDT',
         tran_id: trxId,
